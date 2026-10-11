@@ -35,7 +35,7 @@ type tagsFlag []string
 func (t *tagsFlag) String() string     { return strings.Join(*t, ",") }
 func (t *tagsFlag) Set(v string) error { *t = append(*t, v); return nil }
 func (r *Runner) usage() {
-	fmt.Fprintln(r.Err, "usage: artifactvault <serve|upload|get|list|verify|delete|gc|migrate> ...")
+	fmt.Fprintln(r.Err, "usage: artifactvault <serve|upload|get|list|verify|delete|gc|health|migrate> ...")
 }
 func (r *Runner) Run(args []string) int {
 	if len(args) == 0 {
@@ -56,6 +56,8 @@ func (r *Runner) Run(args []string) int {
 		e = r.delete(args[1:])
 	case "gc":
 		e = r.gc(args[1:])
+	case "health":
+		e = r.health(args[1:])
 	default:
 		r.usage()
 		return 2
@@ -237,6 +239,17 @@ func (r *Runner) gc(args []string) error {
 	req := mustReq(http.MethodPost, r.BaseURL+"/gc", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, e := r.do(req)
+	if e != nil {
+		return e
+	}
+	defer resp.Body.Close()
+	return prettyCopy(r.Out, resp.Body)
+}
+func (r *Runner) health(args []string) error {
+	if len(args) != 0 {
+		return errors.New("health accepts no arguments")
+	}
+	resp, e := r.do(mustReq(http.MethodGet, r.BaseURL+"/health/ready", nil))
 	if e != nil {
 		return e
 	}
