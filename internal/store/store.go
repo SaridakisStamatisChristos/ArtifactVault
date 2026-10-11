@@ -119,7 +119,7 @@ func (s *Store) expectedPath(sha string) string {
 // FormatTimestamp returns the canonical persisted/API timestamp form. Fixed-width
 // UTC nanoseconds preserve chronological order under SQLite TEXT comparisons.
 func FormatTimestamp(t time.Time) string { return t.UTC().Format(timestampLayout) }
-func nowText(t time.Time) string          { return FormatTimestamp(t) }
+func nowText(t time.Time) string         { return FormatTimestamp(t) }
 func randomID() (string, error) {
 	b := make([]byte, 16)
 	if _, e := rand.Read(b); e != nil {
