@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
@@ -77,5 +79,40 @@ func TestCLISmoke(t *testing.T) {
 	out.Reset()
 	if code := r.Run([]string{"gc", "--grace", "0s"}); code != 0 {
 		t.Fatal(errout.String())
+	}
+}
+
+func TestCLIGetFailurePreservesExistingOutput(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "10")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("short"))
+	}))
+	defer ts.Close()
+
+	root := t.TempDir()
+	dest := filepath.Join(root, "artifact.bin")
+	original := []byte("existing-complete-file")
+	if err := os.WriteFile(dest, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errout bytes.Buffer
+	r := &Runner{Out: &out, Err: &errout, BaseURL: ts.URL, Client: ts.Client()}
+	if code := r.Run([]string{"get", "--output", dest, strings.Repeat("a", 64)}); code != 1 {
+		t.Fatalf("get code=%d want 1; stderr=%s", code, errout.String())
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("failed download replaced existing output: got=%q want=%q", got, original)
+	}
+	parts, err := filepath.Glob(filepath.Join(root, ".artifact.bin-*.part"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parts) != 0 {
+		t.Fatalf("temporary download files leaked: %v", parts)
 	}
 }
