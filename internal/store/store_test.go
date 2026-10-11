@@ -68,7 +68,7 @@ func TestUploadRoundTripAndDuplicatePhysicalDedup(t *testing.T) {
 	if !b.Deduplicated {
 		t.Fatal("duplicate not recognized")
 	}
-	if a.Record.SHA256 == b.Record.SHA256 || a.Record.ID == b.Record.ID {
+	if a.Record.SHA256 != b.Record.SHA256 || a.Record.ID == b.Record.ID {
 		t.Fatal("identity/reference semantics wrong")
 	}
 	if got := countObjectFiles(t, c.StorageRoot); got != 1 {
