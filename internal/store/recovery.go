@@ -127,5 +127,7 @@ func (s *Store) Recover() error {
 		}
 		return nil
 	})
-	return errors.Join(errs...)
+	joined := errors.Join(errs...)
+	s.recoveryErr = joined
+	return joined
 }
