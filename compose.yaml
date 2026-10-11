@@ -2,14 +2,14 @@ services:
   artifactvault:
     build: .
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file:
       - .env.example
     volumes:
       - artifactvault-data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "/usr/local/bin/artifactvault", "list", "--limit", "1"]
+      test: ["CMD", "/usr/local/bin/artifactvault", "health"]
       interval: 30s
       timeout: 5s
       retries: 3

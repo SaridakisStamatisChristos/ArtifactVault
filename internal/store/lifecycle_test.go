@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -130,6 +131,25 @@ func TestDeletionAmbiguityGraceAndGCSafety(t *testing.T) {
 	}
 }
 
+func TestGCGraceAcrossExactSecondBoundary(t *testing.T) {
+	s, _, _ := testStore(t)
+	base := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
+	now := base
+	s.now = func() time.Time { return now }
+	u, e := s.Upload(bytes.NewReader([]byte("gc-boundary")), MetadataInput{Filename: "x"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Delete(u.Record.SHA256, u.Record.ID); e != nil {
+		t.Fatal(e)
+	}
+	now = base.Add(100 * time.Millisecond)
+	g, e := s.GC(50 * time.Millisecond)
+	if e != nil || g.Deleted != 1 {
+		t.Fatalf("gc exact-second boundary failed: %+v %v", g, e)
+	}
+}
+
 func TestReadLeasePreventsConcurrentDelete(t *testing.T) {
 	s, _, _ := testStore(t)
 	u, _ := s.Upload(bytes.NewReader(bytes.Repeat([]byte("x"), 1024)), MetadataInput{Filename: "x"})
@@ -193,4 +213,46 @@ func TestRecoveryCleansStagingAndQuarantinesOldOrphan(t *testing.T) {
 		t.Fatalf("orphan quarantine missing: %v", e)
 	}
 	_ = d
+}
+
+func TestRecoveryFailureBlocksReadinessUntilCleanRecovery(t *testing.T) {
+	s, _, c := testStore(t)
+	old := time.Now().Add(-2 * time.Hour)
+	data := []byte("orphan-recovery-failure")
+	sha := digest(data)
+	op := s.expectedPath(sha)
+	if e := os.MkdirAll(filepath.Dir(op), 0o750); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(op, data, 0o640); e != nil {
+		t.Fatal(e)
+	}
+	_ = os.Chtimes(op, old, old)
+
+	lostFound := filepath.Join(c.StorageRoot, "lost+found")
+	if e := os.Remove(lostFound); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(lostFound, []byte("not-a-directory"), 0o600); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.Recover(); e == nil {
+		t.Fatal("expected recovery failure")
+	}
+	if e := s.Ready(); e == nil || !strings.Contains(e.Error(), "startup recovery") {
+		t.Fatalf("readiness did not surface recovery failure: %v", e)
+	}
+
+	if e := os.Remove(lostFound); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.MkdirAll(lostFound, 0o750); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.Recover(); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.Ready(); e != nil {
+		t.Fatalf("readiness did not recover after clean recovery: %v", e)
+	}
 }

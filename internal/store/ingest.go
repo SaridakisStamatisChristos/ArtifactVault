@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
 )
 
 func copyAndHash(dst *os.File, src io.Reader, max int64) (int64, string, error) {

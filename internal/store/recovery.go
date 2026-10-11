@@ -49,7 +49,7 @@ func (s *Store) Recover() error {
 				continue
 			}
 			p := filepath.Join(trash, name)
-			_, _, rel, _, found, qe := s.objectRow(sha)
+			expectedSize, _, rel, _, found, qe := s.objectRow(sha)
 			if qe != nil {
 				errs = append(errs, qe)
 				continue
@@ -66,17 +66,37 @@ func (s *Store) Recover() error {
 			}
 			final := s.expectedPath(sha)
 			if _, e = os.Stat(final); os.IsNotExist(e) {
+				n, h, he := hashFile(p)
+				if he != nil {
+					errs = append(errs, fmt.Errorf("verify recoverable trash %s: %w", sha, he))
+					continue
+				}
+				if h != sha {
+					errs = append(errs, fmt.Errorf("recoverable trash %s is corrupt: %w", sha, ErrCorruptExisting))
+					continue
+				}
+				if n != expectedSize {
+					errs = append(errs, fmt.Errorf("recoverable trash %s size conflicts with metadata: %w", sha, ErrMetadataInconsistency))
+					continue
+				}
 				if e = os.MkdirAll(filepath.Dir(final), 0o750); e == nil {
 					e = os.Rename(p, final)
 				}
 				if e != nil {
 					errs = append(errs, fmt.Errorf("restore trash %s: %w", sha, e))
 				}
-			} else if e == nil {
+			} else if e != nil {
+				errs = append(errs, fmt.Errorf("stat canonical object %s: %w", sha, e))
+			} else {
 				n, h, he := hashFile(final)
-				_, _, _, _, _ = n, h, he, found, qe
-				if he == nil && h == sha {
-					_ = os.Remove(p)
+				if he != nil {
+					errs = append(errs, fmt.Errorf("verify canonical object %s during trash recovery: %w", sha, he))
+				} else if h != sha {
+					errs = append(errs, fmt.Errorf("canonical object %s conflicts with recoverable trash: %w", sha, ErrCorruptExisting))
+				} else if n != expectedSize {
+					errs = append(errs, fmt.Errorf("canonical object %s size conflicts with metadata: %w", sha, ErrMetadataInconsistency))
+				} else if e = os.Remove(p); e != nil {
+					errs = append(errs, fmt.Errorf("remove redundant trash %s: %w", sha, e))
 				}
 			}
 		}
@@ -127,5 +147,7 @@ func (s *Store) Recover() error {
 		}
 		return nil
 	})
-	return errors.Join(errs...)
+	joined := errors.Join(errs...)
+	s.recoveryErr = joined
+	return joined
 }

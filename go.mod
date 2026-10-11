@@ -1,3 +1,3 @@
-module github.com/SaridakisStamatisChristos/ArtitactVault
+module github.com/SaridakisStamatisChristos/ArtifactVault
 
 go 1.23

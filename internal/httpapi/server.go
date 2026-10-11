@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	apispec "github.com/SaridakisStamatisChristos/ArtitactVault/api"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/metrics"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/store"
+	apispec "github.com/SaridakisStamatisChristos/ArtifactVault/api"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/metrics"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/store"
 )
 
 type Server struct {
@@ -156,7 +156,7 @@ func parseTimeParam(r *http.Request, name string) (string, error) {
 	if e != nil {
 		return "", fmt.Errorf("%s must be RFC3339", name)
 	}
-	return t.UTC().Format(time.RFC3339Nano), nil
+	return store.FormatTimestamp(t), nil
 }
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	limit := 50

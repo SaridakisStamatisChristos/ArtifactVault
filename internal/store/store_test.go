@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
 )
 
 func testStore(t *testing.T) (*Store, *db.DB, config.Config) {
@@ -189,5 +189,55 @@ func TestEmptyAndLargeStreamedUpload(t *testing.T) {
 	}
 	if r.maxRequested > 64*1024 {
 		t.Fatalf("stream reader asked for %d bytes", r.maxRequested)
+	}
+}
+
+func TestTimestampOrderingFiltersAndCursorAcrossExactSecondBoundary(t *testing.T) {
+	s, _, _ := testStore(t)
+	base := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	now := base
+	s.now = func() time.Time { return now }
+
+	a, e := s.Upload(bytes.NewReader([]byte("exact-second")), MetadataInput{Filename: "a"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	now = base.Add(100 * time.Millisecond)
+	b, e := s.Upload(bytes.NewReader([]byte("fractional")), MetadataInput{Filename: "b"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if a.Record.CreatedAt != "2026-10-11T12:00:00.000000000Z" || b.Record.CreatedAt != "2026-10-11T12:00:00.100000000Z" {
+		t.Fatalf("timestamps are not canonical: a=%q b=%q", a.Record.CreatedAt, b.Record.CreatedAt)
+	}
+
+	first, e := s.List(ListOptions{Limit: 1})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(first.Items) != 1 || first.Items[0].ID != b.Record.ID || first.NextCursor == "" {
+		t.Fatalf("newest-first ordering/cursor incorrect: %+v", first)
+	}
+	second, e := s.List(ListOptions{Limit: 1, Cursor: first.NextCursor})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(second.Items) != 1 || second.Items[0].ID != a.Record.ID || second.NextCursor != "" {
+		t.Fatalf("second page incorrect: %+v", second)
+	}
+
+	before, e := s.List(ListOptions{CreatedBefore: FormatTimestamp(base)})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(before.Items) != 1 || before.Items[0].ID != a.Record.ID {
+		t.Fatalf("created_before exact-second boundary incorrect: %+v", before)
+	}
+	after, e := s.List(ListOptions{CreatedAfter: FormatTimestamp(base.Add(50 * time.Millisecond))})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(after.Items) != 1 || after.Items[0].ID != b.Record.ID {
+		t.Fatalf("created_after fractional boundary incorrect: %+v", after)
 	}
 }

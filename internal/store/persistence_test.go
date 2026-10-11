@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
 )
 
 func TestOneByteChangeCreatesDifferentIdentity(t *testing.T) {
@@ -177,5 +177,61 @@ func TestRecoveryRestoresInterruptedGCTrash(t *testing.T) {
 	v, e := s.Verify(u.Record.SHA256)
 	if e != nil || v.Status != "verified" {
 		t.Fatalf("restored object did not verify: %+v %v", v, e)
+	}
+}
+
+func TestRecoveryRejectsCorruptCanonicalWhenTrashIsRecoverable(t *testing.T) {
+	s, _, c := testStore(t)
+	data := []byte("gc-conflict-state")
+	u, e := s.Upload(bytes.NewReader(data), MetadataInput{Filename: "x"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	final := s.expectedPath(u.Record.SHA256)
+	trash := filepath.Join(c.StorageRoot, "trash", u.Record.SHA256+".simulated-crash")
+	if e = os.WriteFile(trash, data, 0o640); e != nil {
+		t.Fatal(e)
+	}
+	corrupt := bytes.Repeat([]byte("x"), len(data))
+	if e = os.WriteFile(final, corrupt, 0o640); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Recover(); !errors.Is(e, ErrCorruptExisting) {
+		t.Fatalf("expected recovery corruption error, got %v", e)
+	}
+	if e = s.Ready(); e == nil {
+		t.Fatal("readiness passed with unresolved recovery integrity conflict")
+	}
+	if _, e = os.Stat(trash); e != nil {
+		t.Fatalf("recoverable trash was discarded: %v", e)
+	}
+}
+
+func TestRecoveryRejectsCorruptTrashBeforeRestore(t *testing.T) {
+	s, _, c := testStore(t)
+	data := []byte("gc-trash-integrity")
+	u, e := s.Upload(bytes.NewReader(data), MetadataInput{Filename: "x"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	final := s.expectedPath(u.Record.SHA256)
+	trash := filepath.Join(c.StorageRoot, "trash", u.Record.SHA256+".simulated-crash")
+	if e = os.Rename(final, trash); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(trash, bytes.Repeat([]byte("x"), len(data)), 0o640); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Recover(); !errors.Is(e, ErrCorruptExisting) {
+		t.Fatalf("expected corrupt trash rejection, got %v", e)
+	}
+	if e = s.Ready(); e == nil {
+		t.Fatal("readiness passed after corrupt trash recovery failure")
+	}
+	if _, e = os.Stat(final); !os.IsNotExist(e) {
+		t.Fatalf("corrupt trash was restored to canonical path: %v", e)
+	}
+	if _, e = os.Stat(trash); e != nil {
+		t.Fatalf("corrupt trash evidence was not preserved: %v", e)
 	}
 }

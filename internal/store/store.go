@@ -12,11 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
 )
 
 var hashRE = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+
+const timestampLayout = "2006-01-02T15:04:05.000000000Z"
 
 var (
 	ErrNotFound              = errors.New("artifact not found")
@@ -89,6 +91,7 @@ type Store struct {
 	db                   *db.DB
 	cfg                  config.Config
 	lifecycle            sync.RWMutex
+	recoveryErr          error
 	now                  func() time.Time
 	beforeMetadataCommit func() error
 }
@@ -112,7 +115,11 @@ func expectedRel(sha string) string { return filepath.Join("objects", sha[:2], s
 func (s *Store) expectedPath(sha string) string {
 	return filepath.Join(s.cfg.StorageRoot, expectedRel(sha))
 }
-func nowText(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+// FormatTimestamp returns the canonical persisted/API timestamp form. Fixed-width
+// UTC nanoseconds preserve chronological order under SQLite TEXT comparisons.
+func FormatTimestamp(t time.Time) string { return t.UTC().Format(timestampLayout) }
+func nowText(t time.Time) string         { return FormatTimestamp(t) }
 func randomID() (string, error) {
 	b := make([]byte, 16)
 	if _, e := rand.Read(b); e != nil {

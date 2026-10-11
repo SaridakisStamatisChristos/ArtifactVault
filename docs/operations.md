@@ -14,6 +14,8 @@ At startup ArtifactVault performs conservative recovery:
 
 DB rows whose physical file was externally removed are not repaired. `verify` reports the loss.
 
+A partial recovery failure is retained as service state. The process may remain live for diagnosis, but `/health/ready` returns 503 until a subsequent recovery pass completes cleanly; operators should not route normal traffic to an instance reporting this condition.
+
 ## Corruption
 
 Run `artifactvault verify SHA`. Never overwrite a corrupted object in place. Preserve the DB and corrupted bytes for diagnosis. Restore the exact object from a trusted backup and verify it before reopening normal access. Verification itself performs no repair.
@@ -24,10 +26,10 @@ Default grace is controlled by `ARTIFACTVAULT_GC_GRACE`. A zero grace is allowed
 
 ## Database migrations
 
-`artifactvault migrate up` applies committed migrations. `artifactvault migrate down` rolls back one version when the migration includes a down file. CI rehearses `up -> down -> up` from an empty DB.
+`artifactvault migrate up` applies committed migrations. `artifactvault migrate down` rolls back one version when the migration includes a down file. CI rehearses the complete migration chain down to version 0 and back to the current version.
 
 Before upgrading a production-like deployment, back up DB and object storage. If application rollback also requires a schema rollback, stop the new binary, run the matching `migrate down`, then start the previous binary. Never downgrade a schema while a newer process is serving requests.
 
 ## Readiness incidents
 
-A 503 from `/health/ready` means SQLite or writable staging storage is unavailable. `/health/live` may remain 200 because process liveness is intentionally not dependency readiness.
+A 503 from `/health/ready` means startup recovery is incomplete/failed, SQLite is unavailable, or writable staging storage is unavailable. `/health/live` may remain 200 because process liveness is intentionally not dependency/readiness safety.

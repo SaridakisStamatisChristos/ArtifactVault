@@ -11,14 +11,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Manifest integrity
-        run: sha256sum -c evidence/MANIFEST.sha256
+        run: |
+          ./scripts/manifest.sh
+          git diff --exit-code -- evidence/MANIFEST.sha256
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
       - name: System dependency
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config
       - name: Formatting
-        run: test -z "$(gofmt -l .)"
+        run: |
+          gofmt -d .
+          test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
       - name: Tests
@@ -30,11 +34,13 @@ jobs:
           export ARTIFACTVAULT_DB_PATH="$RUNNER_TEMP/migration.db"
           export ARTIFACTVAULT_STORAGE_ROOT="$RUNNER_TEMP/storage"
           ./artifactvault migrate up
+          test "$(./artifactvault migrate version)" = "2"
+          ./artifactvault migrate down
           test "$(./artifactvault migrate version)" = "1"
           ./artifactvault migrate down
           test "$(./artifactvault migrate version)" = "0"
           ./artifactvault migrate up
-          test "$(./artifactvault migrate version)" = "1"
+          test "$(./artifactvault migrate version)" = "2"
   container:
     runs-on: ubuntu-latest
     steps:

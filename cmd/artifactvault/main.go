@@ -12,12 +12,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/cli"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/httpapi"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/metrics"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/store"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/cli"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/httpapi"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/metrics"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/store"
 )
 
 func level(v string) slog.Level {
