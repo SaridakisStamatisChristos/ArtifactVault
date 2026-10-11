@@ -49,7 +49,7 @@ func (s *Store) Recover() error {
 				continue
 			}
 			p := filepath.Join(trash, name)
-			_, _, rel, _, found, qe := s.objectRow(sha)
+			expectedSize, _, rel, _, found, qe := s.objectRow(sha)
 			if qe != nil {
 				errs = append(errs, qe)
 				continue
@@ -72,11 +72,18 @@ func (s *Store) Recover() error {
 				if e != nil {
 					errs = append(errs, fmt.Errorf("restore trash %s: %w", sha, e))
 				}
-			} else if e == nil {
+			} else if e != nil {
+				errs = append(errs, fmt.Errorf("stat canonical object %s: %w", sha, e))
+			} else {
 				n, h, he := hashFile(final)
-				_, _, _, _, _ = n, h, he, found, qe
-				if he == nil && h == sha {
-					_ = os.Remove(p)
+				if he != nil {
+					errs = append(errs, fmt.Errorf("verify canonical object %s during trash recovery: %w", sha, he))
+				} else if h != sha {
+					errs = append(errs, fmt.Errorf("canonical object %s conflicts with recoverable trash: %w", sha, ErrCorruptExisting))
+				} else if n != expectedSize {
+					errs = append(errs, fmt.Errorf("canonical object %s size conflicts with metadata: %w", sha, ErrMetadataInconsistency))
+				} else if e = os.Remove(p); e != nil {
+					errs = append(errs, fmt.Errorf("remove redundant trash %s: %w", sha, e))
 				}
 			}
 		}
