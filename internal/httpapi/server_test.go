@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/metrics"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/store"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/metrics"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/store"
 )
 
 func setupAPI(t *testing.T) (*httptest.Server, *store.Store, *db.DB, config.Config) {
