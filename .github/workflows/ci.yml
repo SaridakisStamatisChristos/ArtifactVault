@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Manifest integrity
+        run: sha256sum -c evidence/MANIFEST.sha256
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
@@ -37,5 +39,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Compose
+        run: docker compose config >/dev/null
       - name: Build image
         run: docker build -t artifactvault:ci .
+      - name: Boot image and verify readiness
+        run: |
+          docker run -d --name artifactvault-ci -p 127.0.0.1:18080:8080 artifactvault:ci
+          trap 'docker logs artifactvault-ci || true; docker rm -f artifactvault-ci || true' EXIT
+          for i in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/health/ready; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1

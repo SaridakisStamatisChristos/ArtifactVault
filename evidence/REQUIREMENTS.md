@@ -29,8 +29,8 @@ States describe the current revision in the execution environment used to build 
 | R-23 | Bounded metadata and safe errors | configured limits + API tests; generic 500s | VERIFIED |
 | R-24 | Restart/recovery behavior | `Recover` + stale staging/orphan tests + simulated interrupted-GC trash restoration and re-verification | PARTIAL (representative crash state executed; process-kill fault injection not executed) |
 | R-25 | Serious automated tests without weakened invariants | full Go suite locally green, including verification concurrent with uploads and metadata persistence across reopen | VERIFIED |
-| R-26 | Dockerfile/Compose/local developer path | files generated, command documented | UNVERIFIED locally (Docker unavailable) |
-| R-27 | CI | GitHub Actions workflow generated | UNVERIFIED until observed on GitHub |
+| R-26 | Dockerfile/Compose/local developer path | Docker image built successfully in GitHub Actions run 38117727427; follow-up gate validates Compose and boots the image through readiness | VERIFIED externally |
+| R-27 | CI | GitHub Actions run 38117727427: formatting, vet, race tests, build, migration rehearsal, and container build completed successfully | VERIFIED externally |
 | R-28 | Release/rollback/recovery guidance | operations docs | VERIFIED as documentation |
 | R-29 | Kubernetes only if valuable | explicitly excluded for single-node SQLite/local-storage target | N/A |
 | R-30 | Performance claims only with evidence | no throughput/latency claim; bounded-buffer property tested | VERIFIED |
