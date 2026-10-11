@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/httpapi"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/metrics"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/store"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/httpapi"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/metrics"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/store"
 )
 
 func TestCLISmoke(t *testing.T) {
