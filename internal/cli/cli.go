@@ -138,18 +138,48 @@ func (r *Runner) get(args []string) error {
 		return e
 	}
 	defer resp.Body.Close()
-	var w io.Writer = r.Out
-	var f *os.File
-	if *out != "" {
-		f, e = os.Create(*out)
-		if e != nil {
-			return e
-		}
-		defer f.Close()
-		w = f
+	if *out == "" {
+		_, e = io.Copy(r.Out, resp.Body)
+		return e
 	}
-	_, e = io.Copy(w, resp.Body)
-	return e
+	return atomicWriteFrom(*out, resp.Body)
+}
+func atomicWriteFrom(path string, src io.Reader) (err error) {
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	f, err := os.CreateTemp(dir, "."+base+"-*.part")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = f.Close()
+			_ = os.Remove(tmp)
+		}
+	}()
+	if _, err = io.Copy(f, src); err != nil {
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(tmp, path); err != nil {
+		return err
+	}
+	committed = true
+	if d, openErr := os.Open(dir); openErr == nil {
+		err = d.Sync()
+		_ = d.Close()
+		if err != nil {
+			return fmt.Errorf("sync output directory: %w", err)
+		}
+	}
+	return nil
 }
 func (r *Runner) list(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
