@@ -1,0 +1,315 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ArtifactVault API",
+    "version": "0.1.0",
+    "description": "Local-first content-addressed artifact storage. Initial deployment trust boundary is trusted internal/local clients; authentication is intentionally not provided."
+  },
+  "paths": {
+    "/artifacts": {
+      "post": {
+        "summary": "Stream an artifact into content-addressed storage",
+        "parameters": [
+          {
+            "name": "X-Artifact-Filename",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "X-Artifact-Tags",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Artifact-Description",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "maxLength": 16384
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "New physical object finalized"
+          },
+          "200": {
+            "description": "Physical object already existed; new logical record created"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "description": "Artifact too large"
+          },
+          "409": {
+            "description": "Existing object integrity conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      },
+      "get": {
+        "summary": "List active logical artifact records",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of records"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/artifacts/{sha256}": {
+      "get": {
+        "summary": "Get artifact metadata and active logical records",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SHA"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact metadata"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Logically delete one retaining record",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SHA"
+          },
+          {
+            "name": "record_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Required when more than one active logical record exists"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logical record deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Multiple active records; record_id required"
+          }
+        }
+      }
+    },
+    "/artifacts/{sha256}/content": {
+      "get": {
+        "summary": "Download artifact bytes; HTTP Range supported",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SHA"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full content"
+          },
+          "206": {
+            "description": "Byte range"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "description": "Invalid or unsatisfiable range"
+          }
+        }
+      }
+    },
+    "/artifacts/{sha256}/verify": {
+      "post": {
+        "summary": "Recompute SHA-256 and classify integrity",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SHA"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result, including corruption or metadata inconsistency"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/gc": {
+      "post": {
+        "summary": "Collect unreferenced objects after grace period",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "grace_seconds": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "GC summary"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/health/live": {
+      "get": {
+        "summary": "Process liveness",
+        "responses": {
+          "200": {
+            "description": "Process is live"
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Dependency readiness",
+        "responses": {
+          "200": {
+            "description": "Database and storage are usable"
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus text metrics",
+        "responses": {
+          "200": {
+            "description": "Metrics"
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "Committed OpenAPI document",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "SHA": {
+        "name": "sha256",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed or invalid request"
+      },
+      "NotFound": {
+        "description": "Artifact not found or no active logical retention"
+      },
+      "Internal": {
+        "description": "Internal error; safe message only"
+      }
+    }
+  }
+}

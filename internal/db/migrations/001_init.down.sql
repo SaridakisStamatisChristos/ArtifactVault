@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS artifact_records;
+DROP TABLE IF EXISTS objects;
