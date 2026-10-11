@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
 )
 
 func (s *Store) Delete(sha, recordID string) (DeleteResult, error) {
@@ -172,6 +172,12 @@ func (s *Store) gcOne(sha, cut string) error {
 	return nil
 }
 func (s *Store) Ready() error {
+	s.lifecycle.RLock()
+	recoveryErr := s.recoveryErr
+	s.lifecycle.RUnlock()
+	if recoveryErr != nil {
+		return fmt.Errorf("startup recovery: %w", recoveryErr)
+	}
 	if e := s.db.Ping(); e != nil {
 		return fmt.Errorf("database: %w", e)
 	}
