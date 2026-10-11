@@ -30,11 +30,13 @@ jobs:
           export ARTIFACTVAULT_DB_PATH="$RUNNER_TEMP/migration.db"
           export ARTIFACTVAULT_STORAGE_ROOT="$RUNNER_TEMP/storage"
           ./artifactvault migrate up
+          test "$(./artifactvault migrate version)" = "2"
+          ./artifactvault migrate down
           test "$(./artifactvault migrate version)" = "1"
           ./artifactvault migrate down
           test "$(./artifactvault migrate version)" = "0"
           ./artifactvault migrate up
-          test "$(./artifactvault migrate version)" = "1"
+          test "$(./artifactvault migrate version)" = "2"
   container:
     runs-on: ubuntu-latest
     steps:
