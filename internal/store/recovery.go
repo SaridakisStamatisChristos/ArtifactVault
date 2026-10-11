@@ -66,6 +66,19 @@ func (s *Store) Recover() error {
 			}
 			final := s.expectedPath(sha)
 			if _, e = os.Stat(final); os.IsNotExist(e) {
+				n, h, he := hashFile(p)
+				if he != nil {
+					errs = append(errs, fmt.Errorf("verify recoverable trash %s: %w", sha, he))
+					continue
+				}
+				if h != sha {
+					errs = append(errs, fmt.Errorf("recoverable trash %s is corrupt: %w", sha, ErrCorruptExisting))
+					continue
+				}
+				if n != expectedSize {
+					errs = append(errs, fmt.Errorf("recoverable trash %s size conflicts with metadata: %w", sha, ErrMetadataInconsistency))
+					continue
+				}
 				if e = os.MkdirAll(filepath.Dir(final), 0o750); e == nil {
 					e = os.Rename(p, final)
 				}
