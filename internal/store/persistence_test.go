@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/config"
-	"github.com/SaridakisStamatisChristos/ArtitactVault/internal/db"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/config"
+	"github.com/SaridakisStamatisChristos/ArtifactVault/internal/db"
 )
 
 func TestOneByteChangeCreatesDifferentIdentity(t *testing.T) {
