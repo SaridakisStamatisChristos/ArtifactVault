@@ -20,7 +20,9 @@ jobs:
       - name: System dependency
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config
       - name: Formatting
-        run: test -z "$(gofmt -l .)"
+        run: |
+          gofmt -d .
+          test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
       - name: Tests
