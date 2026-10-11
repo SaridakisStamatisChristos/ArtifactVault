@@ -173,10 +173,9 @@ func (s *Store) gcOne(sha, cut string) error {
 }
 func (s *Store) Ready() error {
 	s.lifecycle.RLock()
-	recoveryErr := s.recoveryErr
-	s.lifecycle.RUnlock()
-	if recoveryErr != nil {
-		return fmt.Errorf("startup recovery: %w", recoveryErr)
+	defer s.lifecycle.RUnlock()
+	if s.recoveryErr != nil {
+		return fmt.Errorf("startup recovery: %w", s.recoveryErr)
 	}
 	if e := s.db.Ping(); e != nil {
 		return fmt.Errorf("database: %w", e)
