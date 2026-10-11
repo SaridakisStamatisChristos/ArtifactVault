@@ -40,6 +40,11 @@ func TestCLISmoke(t *testing.T) {
 	}
 	var out, errout bytes.Buffer
 	r := &Runner{Out: &out, Err: &errout, BaseURL: ts.URL, Client: ts.Client()}
+	if code := r.Run([]string{"health"}); code != 0 {
+		t.Fatalf("health code=%d err=%s", code, errout.String())
+	}
+	out.Reset()
+	errout.Reset()
 	if code := r.Run([]string{"upload", "--tag", "cli", file}); code != 0 {
 		t.Fatalf("upload code=%d err=%s", code, errout.String())
 	}
