@@ -1,29 +1,58 @@
 # ArtifactVault
 
-ArtifactVault is a local-first, content-addressed artifact storage service for software teams. Exact binary bytes define identity: `SHA256(exact bytes)`. It exposes a REST API and a single-binary CLI while persisting metadata in SQLite and artifact bytes in a filesystem CAS.
+ArtifactVault is a local-first, content-addressed artifact store for software and research teams. It stores arbitrary binary artifacts—builds, benchmark outputs, datasets, models, logs, and reports—under exact-byte SHA-256 identity and exposes them through a REST API and a single-binary CLI.
 
-## Guarantees
+`SHA256(exact bytes)` is the storage identity. Filenames and tags are metadata, not identity.
 
-- Uploads stream through a fixed 64 KiB buffer; file size does not determine process memory usage.
-- Bytes are SHA-256 hashed while streaming to a staging file, `fsync`ed, then finalized into a hash-derived path before metadata is committed.
-- Identical bytes share one physical object. Each upload may create a distinct logical metadata record that retains the same object.
-- A failed upload does not create a valid logical artifact record.
-- Downloads are served only for active logical retention records, are re-hashed before any bytes are returned, and support HTTP byte ranges.
-- Integrity verification recomputes SHA-256 and reports `verified`, `missing_physical_object`, `corrupted_object`, or `metadata_inconsistency`; it never silently repairs corruption.
-- Logical deletion never directly removes bytes. Garbage collection removes an object only after all logical records are deleted and the grace period has elapsed.
-- A read lease blocks destructive lifecycle operations while content is being served.
+## What it is for
 
-ArtifactVault deliberately targets a **single service process over one local filesystem and one SQLite database**. Multiple independent server processes sharing the same database/storage root are not a declared consistency target.
+ArtifactVault is useful when a team needs a small, scriptable artifact service without adopting a distributed artifact platform. Typical uses include:
+
+- preserving build and benchmark outputs by content rather than mutable filenames;
+- deduplicating repeated binaries, datasets, models, logs, and reports;
+- moving artifacts between local/internal workflows through a stable CLI or HTTP contract;
+- verifying stored bytes before they are reused;
+- retaining independent metadata records for identical content.
+
+It deliberately targets one service process, one local filesystem, and one SQLite database. It is not a multi-node registry, an experiment-tracking platform, or an object-storage replacement.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    CLI[ArtifactVault CLI] -->|HTTP| API[REST API]
+    API --> STORE[Storage service]
+    STORE --> DB[(SQLite metadata)]
+    STORE --> STAGING[staging/]
+    STORE --> CAS[objects/ SHA-256 CAS]
+    STORE --> TRASH[trash/]
+    STORE --> LOST[lost+found/]
+    RECOVERY[Startup recovery] --> STORE
+```
+
+The CLI depends only on the HTTP contract. The storage service owns content identity, lifecycle locking, integrity verification, recovery, and garbage collection. SQLite stores logical records and migration state; artifact bytes live in the filesystem CAS. See [`docs/architecture.md`](docs/architecture.md) for the detailed consistency and durability model.
+
+## Integrity and lifecycle guarantees
+
+- Uploads stream through a fixed 64 KiB buffer; artifact size does not determine process memory usage.
+- Bytes are SHA-256 hashed while streaming to a staging file, `fsync`ed, then finalized into a hash-derived object path before metadata is committed.
+- Identical bytes share one physical object. Separate uploads can retain separate logical metadata records.
+- Failed uploads do not create valid logical artifact records.
+- Downloads are allowed only for active logical records and are re-hashed before any bytes are returned.
+- HTTP byte ranges are supported for content retrieval.
+- Verification reports `verified`, `missing_physical_object`, `corrupted_object`, or `metadata_inconsistency`; it does not silently repair corruption.
+- Logical deletion does not directly remove bytes. Garbage collection removes an object only after all logical records are deleted and the grace period has elapsed.
+- Active content reads hold a lease that blocks destructive lifecycle operations until the read completes.
 
 ## Quick start
 
-The simplest path is Docker Compose:
+Docker Compose is the simplest path:
 
 ```bash
 docker compose up --build
 ```
 
-The API then listens on `http://127.0.0.1:8080`.
+The API listens on `http://127.0.0.1:8080` by default.
 
 Native development requires Go 1.23+, a C compiler, `pkg-config`, and SQLite development headers (`libsqlite3-dev` on Debian/Ubuntu):
 
@@ -37,7 +66,7 @@ ARTIFACTVAULT_STORAGE_ROOT=./data/storage \
 
 ## CLI
 
-The CLI defaults to `http://127.0.0.1:8080`; set `ARTIFACTVAULT_URL` to change it.
+The CLI defaults to `http://127.0.0.1:8080`. Set `ARTIFACTVAULT_URL` to use another endpoint.
 
 ```bash
 artifactvault upload --tag benchmark --description "run 42" results.tar.zst
@@ -46,15 +75,16 @@ artifactvault get --output restored.tar.zst <SHA256>
 artifactvault verify <SHA256>
 artifactvault delete <SHA256>
 artifactvault gc
+artifactvault health
 ```
 
-If several active logical records retain the same SHA-256, deletion by hash is intentionally rejected as ambiguous. Select the record explicitly:
+If several active logical records retain the same SHA-256, deletion by hash is intentionally rejected as ambiguous. Select the logical record explicitly:
 
 ```bash
 artifactvault delete --record <RECORD_UUID> <SHA256>
 ```
 
-To override the configured grace period for an authorized manual collection:
+To override the configured grace period for a manual collection:
 
 ```bash
 artifactvault gc --grace 0s
@@ -62,19 +92,22 @@ artifactvault gc --grace 0s
 
 ## REST API
 
-The committed and runtime-served OpenAPI 3.1 document is [`api/openapi.json`](api/openapi.json) and is available at `GET /openapi.json`. Core routes:
+The committed OpenAPI 3.1 document is [`api/openapi.json`](api/openapi.json) and is served at `GET /openapi.json`.
 
-- `POST /artifacts` — raw streaming request body; metadata in `X-Artifact-Filename`, `X-Artifact-Tags`, `X-Artifact-Description`, and `Content-Type`.
-- `GET /artifacts` — keyset pagination plus tag/creation-time filters.
-- `GET /artifacts/{sha256}` — physical identity plus active logical metadata records.
-- `GET /artifacts/{sha256}/content` — exact bytes, including HTTP Range support.
-- `DELETE /artifacts/{sha256}` — logical deletion only.
-- `POST /artifacts/{sha256}/verify` — non-repairing integrity verification.
-- `POST /gc` — grace-aware physical collection.
-- `GET /health/live` and `GET /health/ready` — deliberately distinct health semantics.
-- `GET /metrics` — basic Prometheus text counters.
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/artifacts` | Stream an artifact into the vault |
+| `GET` | `/artifacts` | List active logical records with filters and keyset pagination |
+| `GET` | `/artifacts/{sha256}` | Read physical identity and active logical metadata |
+| `GET` | `/artifacts/{sha256}/content` | Retrieve exact bytes, including HTTP Range support |
+| `DELETE` | `/artifacts/{sha256}` | Logically delete a selected retention record |
+| `POST` | `/artifacts/{sha256}/verify` | Recompute and report integrity state |
+| `POST` | `/gc` | Run grace-aware physical collection |
+| `GET` | `/health/live` | Process liveness |
+| `GET` | `/health/ready` | Recovery, SQLite, and writable-storage readiness |
+| `GET` | `/metrics` | Prometheus text counters |
 
-See [`docs/api.md`](docs/api.md) for error and metadata semantics.
+Upload metadata is carried in `X-Artifact-Filename`, `X-Artifact-Tags`, `X-Artifact-Description`, and `Content-Type`. See [`docs/api.md`](docs/api.md) for error, filter, deletion, and verification semantics.
 
 ## Storage layout
 
@@ -84,19 +117,19 @@ See [`docs/api.md`](docs/api.md) for error and metadata semantics.
   storage/
     staging/      # in-progress uploads; never valid artifacts
     objects/aa/bb/<sha256>
-    trash/        # crash-safe GC handoff
+    trash/        # crash-safe GC staging
     lost+found/   # old finalized orphans with no metadata
 ```
 
-The database uses WAL mode, `synchronous=FULL`, foreign keys, and versioned migrations in `internal/db/migrations/`.
+SQLite uses WAL mode, `synchronous=FULL`, foreign keys, and versioned migrations under `internal/db/migrations/`.
 
-## Health and operations
+## Configuration
 
-`/health/live` proves only that the HTTP process responds. `/health/ready` additionally verifies SQLite access and an actual create/write/fsync/remove probe in staging storage. If a required dependency is unusable, readiness returns 503 while liveness can remain 200.
+Server configuration is environment-based. [` .env.example`](.env.example) documents all supported variables, including database/storage paths, bind address, GC grace, staging TTL, metadata limits, optional maximum artifact size, and log level.
 
-Structured logs are JSON in normal server execution. Recovery, backup, restore, corruption, GC, and rollback procedures are in [`docs/operations.md`](docs/operations.md).
+The default server bind is `127.0.0.1:8080`. The container listens on `0.0.0.0:8080` inside the container, while the supplied Compose file publishes it only on host loopback.
 
-## Development and evidence
+## Testing and verification
 
 ```bash
 make fmt
@@ -104,11 +137,26 @@ make vet
 make test
 make race
 make build
-make manifest
 ```
 
-CI executes formatting, vet, race-enabled tests, binary build, migration up/down/up rehearsal, and a Docker image build. R7 requirement, assumption, claim, and failure/repair ledgers live under [`evidence/`](evidence/).
+CI checks formatting, `go vet`, race-enabled tests, binary build, the full migration up/down/up path, Docker Compose validity, image build, and a live container readiness probe. The test suite covers content identity, bounded-memory ingestion, deduplication, corruption detection, deletion/GC rules, migration behavior, recovery states, concurrency, API semantics, and CLI failure handling.
 
-## Scope and trust boundary
+See [`docs/verification.md`](docs/verification.md) for the verification boundary and what is intentionally not claimed.
 
-ArtifactVault v0.1 is intended for trusted local/internal deployment. Authentication/authorization, multi-tenancy, Kubernetes, distributed locking, object-store backends, and internet-facing hardening are **not** silently implied. See [`SECURITY.md`](SECURITY.md) for explicit N/A rationale and the controls that are implemented.
+## Operations
+
+`/health/live` proves only that the HTTP process responds. `/health/ready` additionally checks startup recovery state, SQLite access, and a real create/write/fsync/remove probe in staging storage. Structured server logs are JSON.
+
+Backup, restore, corruption, recovery, garbage collection, and rollback procedures are documented in [`docs/operations.md`](docs/operations.md).
+
+## Limitations and trust boundary
+
+ArtifactVault is intended for trusted local/internal deployment. Authentication/authorization, multi-tenancy, TLS termination, distributed locking, multiple independent writers, object-store backends, Kubernetes, and internet-facing hardening are outside the current product boundary.
+
+Multiple clients may use one ArtifactVault server concurrently. Multiple independent ArtifactVault server processes sharing the same SQLite database and storage root are not a supported consistency model.
+
+See [`SECURITY.md`](SECURITY.md) for the security boundary and operator responsibilities.
+
+## License
+
+ArtifactVault is source-available under the repository's proprietary [`LICENSE`](LICENSE). Public source availability does not grant open-source usage, modification, deployment, or redistribution rights.

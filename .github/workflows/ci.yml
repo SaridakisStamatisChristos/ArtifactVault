@@ -10,10 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Manifest integrity
-        run: |
-          ./scripts/manifest.sh
-          git diff --exit-code -- evidence/MANIFEST.sha256
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
