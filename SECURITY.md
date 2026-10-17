@@ -1,11 +1,15 @@
 # Security and trust boundary
 
-ArtifactVault v0.1 is for trusted local/internal networks. It has no authentication or authorization layer by design; exposing it directly to untrusted networks is unsupported. Enterprise identity, tenant isolation, rate limiting, TLS termination, and audit-policy integration are N/A for the declared deployment boundary, not implicit features.
+ArtifactVault is designed for trusted local and internal networks. The current product boundary does not include application authentication or authorization, multi-tenancy, TLS termination, distributed writers, rate limiting, or enterprise identity integration. Exposing the service directly to untrusted networks is unsupported.
 
-Implemented controls include strict SHA-256 syntax validation, hash-derived filesystem paths, staging paths created by the server, metadata bounds, safe JSON errors, no user-supplied filesystem path reads, no embedded secrets, bounded list pages, request-header limits, corruption detection, and separation of liveness/readiness.
+Implemented controls include strict SHA-256 syntax validation, hash-derived filesystem paths, server-created staging paths, bounded metadata, safe JSON errors, no user-supplied filesystem path reads, no embedded secrets, bounded list pages, request-header limits, corruption detection, conservative recovery, and separate liveness/readiness semantics.
 
-The default Docker Compose port mapping binds only to host loopback (`127.0.0.1:8080`). Operators who intentionally publish the service on another interface are expanding the trust boundary and must provide appropriate network access controls and, where required, TLS/authentication in front of ArtifactVault.
+The default server bind is loopback-only. The container listens on `0.0.0.0:8080` inside the container, while the supplied Docker Compose mapping publishes the service only on host loopback (`127.0.0.1:8080`). Operators who intentionally publish ArtifactVault on another interface are expanding the trust boundary and must provide appropriate network controls and, when needed, TLS and authentication in front of the service.
 
-Filesystem permissions and host/container access remain deployment responsibilities. Report suspected vulnerabilities privately to the repository owner rather than publishing exploit details before coordination.
+Filesystem permissions, host access, backup protection, and storage-device security remain deployment responsibilities.
 
-Kubernetes is N/A for the initial single-node/local-first architecture. It would add operational surface without solving a required deployment problem and could encourage unsupported multi-replica use over SQLite/local storage.
+ArtifactVault intentionally supports one service process over one SQLite database and one local storage root. Multiple independent server processes sharing the same database/storage root are outside the supported consistency model.
+
+Kubernetes is not part of the current architecture because it would add orchestration surface without solving a required single-node storage problem and could encourage unsupported multi-replica use over SQLite/local storage.
+
+Report suspected vulnerabilities privately to the repository owner rather than publishing exploit details before coordination.

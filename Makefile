@@ -1,4 +1,4 @@
-.PHONY: fmt vet test race build run migrate-up migrate-down manifest
+.PHONY: fmt vet test race build run migrate-up migrate-down
 fmt:
 	gofmt -w $$(find . -name '*.go' -type f)
 vet:
@@ -15,5 +15,3 @@ migrate-up: build
 	./bin/artifactvault migrate up
 migrate-down: build
 	./bin/artifactvault migrate down
-manifest:
-	./scripts/manifest.sh
