@@ -125,7 +125,7 @@ SQLite uses WAL mode, `synchronous=FULL`, foreign keys, and versioned migrations
 
 ## Configuration
 
-Server configuration is environment-based. [` .env.example`](.env.example) documents all supported variables, including database/storage paths, bind address, GC grace, staging TTL, metadata limits, optional maximum artifact size, and log level.
+Server configuration is environment-based. [`.env.example`](.env.example) documents all supported variables, including database/storage paths, bind address, GC grace, staging TTL, metadata limits, optional maximum artifact size, and log level.
 
 The default server bind is `127.0.0.1:8080`. The container listens on `0.0.0.0:8080` inside the container, while the supplied Compose file publishes it only on host loopback.
 
